@@ -1,0 +1,154 @@
+#!/usr/bin/env python3.4
+# encoding: utf-8
+"""
+Created on 17-12-11
+
+@author: Xu
+"""
+import time
+import datetime
+import config
+import logging.config
+
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from common.pgutils import get_conn, execute_sql, execute_select
+from lxml import etree
+
+logging.config.fileConfig("logging.conf")
+logger = logging.getLogger("root")
+
+sql_cj = "INSERT INTO public.news_cj(news_date, spider_data, news_source, news_type, news) VALUES(%s, %s, %s, %s, %s)"
+
+chromedriver_path = config.get_config("chromedriver", "chromedriver_path")
+
+
+def get_news(conn, max_date, current_time):
+    """
+    华尔街见闻抓取
+    :param conn:
+    :param max_date: 数据库中最新新闻的日期
+    :param current_time: 当前时间
+    :return:
+    """
+    spider_data = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
+    driver = None
+    try:
+        driver = webdriver.Chrome(executable_path=chromedriver_path)
+        driver.get('https://wallstreetcn.com/live/global')
+        # 让页面滚动到下面,window.scrollBy(0, scrollStep),ScrollStep ：间歇滚动间距
+        js = 'window.scrollBy(0,3000)'
+        driver.execute_script(js)
+        time.sleep(5)
+        js = 'window.scrollBy(0,60000)'
+        driver.execute_script(js)
+        time.sleep(5)
+        pages = driver.page_source
+        soup = BeautifulSoup(pages, 'html.parser')
+        soup1 = soup.find('div', class_='livenews')
+        content = soup1.find_all('div', class_='live-item')
+        news_source = '华尔街见闻'
+        news_type = '宏观'
+        last_news_time = '23:59'
+        d_date = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
+        for cont in content:
+            news_time = cont.find('span', attrs={'class': 'live-item__time__text'}).get_text()
+            news = cont.find('div', attrs={'class': 'content-html'}).get_text().strip().replace('//', '')
+            if last_news_time < news_time:
+                d_date = d_date - datetime.timedelta(days=1)
+            s_date = d_date.strftime("%Y-%m-%d")
+            over_time = s_date + ' ' + news_time
+            if max_date > over_time:
+                break
+            sql_params = [over_time, spider_data, news_source, news_type, news]
+            logger.debug(sql_cj)
+            logger.debug(sql_params)
+            execute_sql(conn, sql_cj, sql_params)
+            last_news_time = news_time
+    finally:
+        if driver:
+            driver.close()
+            driver.quit()
+
+
+def get_sina_news(conn, max_date, current_time):
+    """
+    爬取新浪财经突发live板块新闻
+    :param conn:
+    :param max_date: 数据库中最新新闻的日期
+    :param current_time: 当前时间
+    :return:
+    """
+    spider_data = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
+    driver = None
+    try:
+        driver = webdriver.Chrome(executable_path=chromedriver_path)
+        for num in range(1, 13):
+            url = 'http://live.sina.com.cn/zt/app_zt/f/v/finance/globalnews1/?page=' + str(num)
+            driver.get(url)
+            # 让页面滚动到下面,window.scrollBy(0, scrollStep),ScrollStep ：间歇滚动间距
+            js = 'window.scrollBy(0,3000)'
+            driver.execute_script(js)
+            time.sleep(5)
+            js = 'window.scrollBy(0,5000)'
+            driver.execute_script(js)
+            time.sleep(5)
+            pages = driver.page_source
+            xml = etree.HTML(pages)
+            time_list = xml.xpath('//*[@id="bd_c0"]/div[@class="bd_list"]/div["bd_i_og"]/@data-time')
+            soup = BeautifulSoup(pages, 'html.parser')
+            soup1 = soup.find('div', class_='bd_list')
+            content = soup1.select('.bd_i_og')
+            news_source = '新浪财经'
+            for i in range(len(time_list)):
+                time_stamp = time_list[i]
+                data = content[i]
+                time_array = time.localtime(int(time_stamp))
+                over_time = time.strftime("%Y-%m-%d %H:%M", time_array)
+                if max_date < over_time:
+                    data_type = data.find('p', attrs={'class': 'bd_i_tags'}).get_text().strip().replace("\n", "")
+                    news_type = data_type.replace(' ', '')
+                    news = data.find('p', attrs={'class': 'bd_i_txt_c'}).get_text()
+                    sql_params = [over_time, spider_data, news_source, news_type, news]
+                    logger.debug(sql_cj)
+                    logger.debug(sql_params)
+                    execute_sql(conn, sql_cj, sql_params)
+                else:
+                    return
+    finally:
+        if driver:
+            driver.close()
+            driver.quit()
+
+
+def main():
+    now = datetime.datetime.now()
+    current_time = now.strftime("%Y-%m-%d %H:%M:%S")
+    one_day = now - datetime.timedelta(days=1)
+    one_day_ago = one_day.strftime('%Y-%m-%d %H:%M:%S')[:16]
+    conn = None
+    try:
+        conn = get_conn()
+        with conn:
+            sql_max_date = """
+            SELECT max(CASE WHEN news_source='新浪财经' THEN news_date END),
+                max(CASE WHEN news_source='华尔街见闻' THEN news_date END)
+            FROM public.news_cj
+            """
+            res = execute_select(conn, sql_max_date)
+            max_date_sina = res[0][0] if res[0][0] else one_day_ago
+            max_date_news = res[0][1] if res[0][1] else one_day_ago
+            sql_delete = """
+                DELETE FROM public.news_cj
+                WHERE news_date <= (to_char(now()+interval '-10 day', 'YYYY-MM-DD HH:MI:SS')) or news_date in (%s, %s)
+            """
+            execute_sql(conn, sql_delete, (max_date_sina, max_date_news))
+            get_news(conn, max_date_news, current_time)
+            get_sina_news(conn, max_date_sina, current_time)
+    finally:
+        if conn:
+            conn.close()
+
+
+if __name__ == '__main__':
+    main()

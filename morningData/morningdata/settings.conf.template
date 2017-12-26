@@ -1,0 +1,15 @@
+# spider configuration
+
+# 配置数据库
+[db_param]
+host=10.130.38.35
+database=pythondb
+user=xsl
+password=xsl
+port=5432
+DBType=PostgreSQL
+
+# 配置chromedriver 路径
+[chromedriver]
+chromedriver_path=/usr/local/share/chromedriver
+

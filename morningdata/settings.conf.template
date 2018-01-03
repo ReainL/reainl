@@ -2,7 +2,7 @@
 
 # 配置数据库
 [db_param]
-host=10.130.38.35
+host=10.188.88.88
 database=pythondb
 user=xsl
 password=xsl

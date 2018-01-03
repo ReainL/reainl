@@ -21,7 +21,7 @@ code_engine = get_engine()
 
 def get_code():
     """
-    大盘指数行情数据获取 可获得上证指数、深证指数
+    使用sqlalchemy存储大盘指数行情数据获取 可获得上证指数、深证指数
     :return:
     """
     engine = create_engine(code_engine)
@@ -29,6 +29,36 @@ def get_code():
     logger.info(df_index)
     # 存入数据库
     df_index.to_sql('middle_news_market', engine, schema='public', if_exists='replace')
+
+
+def get_code1(conn):
+    """
+    使用常规存储方式存储大盘指数行情数据获取 可获得上证指数、深证指数
+    :return:
+    """
+    df_index = ts.get_index()
+    sql_market = """
+    INSERT INTO middle_news_market(
+        code, name, change_market, open_market, preclose, close_market, high, low, volume, amount
+        ) 
+    VALUES(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    for i in range(0, 25):
+        code = df_index['code'][i]
+        name = df_index['name'][i]
+        change_market = str('%.2f' % df_index['change'][i])
+        open_market = str('%.4f' % df_index['open'][i])
+        preclose = str('%.4f' % df_index['preclose'][i])
+        close = str('%.4f' % df_index['close'][i])
+        high = str('%.4f' % df_index['high'][i])
+        low = str('%.4f' % df_index['low'][i])
+        volume = str(df_index['volume'][i])
+        amount = str('%.4f' % df_index['amount'][i])
+        sql_params = [code, name, change_market, open_market, preclose, close, high, low, volume, amount]
+        logger.debug(sql_market)
+        logger.debug(sql_params)
+        # 存入数据库
+        execute_sql(conn, sql_market, sql_params)
 
 
 def get_rate(conn):

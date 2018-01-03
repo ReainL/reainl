@@ -1,3 +1,4 @@
+-- postgresql数据库
 -- 新闻表
 DROP TABLE IF EXISTS public.news_cj;
 CREATE TABLE public.news_cj(
@@ -33,3 +34,20 @@ COMMENT ON COLUMN public.stock_code.stock_applies IS '涨跌幅';
 insert into public.stock_code(
     stock_time, spider_data, stock_name, stock_price)
 values('2017-12-25 15:40:17', '2017-12-25 15:40:17', '人民币汇率', '6.576');
+
+
+-- mysql数据库
+-- 大盘指数表
+DROP TABLE IF EXISTS middle_news_market;
+CREATE TABLE middle_news_market(
+    code text COMMENT '指数代码',
+    name text COMMENT '指数名称',
+    change_market text COMMENT '涨跌幅',
+    open_market text COMMENT '开盘点位',
+    preclose text COMMENT '昨日收盘点位',
+    close_market text COMMENT '收盘点位',
+    high text COMMENT '最高点位',
+    low text COMMENT '最低点位',
+    volume text COMMENT '成交量(手)',
+    amount text COMMENT '成交金额(亿元)'
+) COMMENT '大盘指数表';

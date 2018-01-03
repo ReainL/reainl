@@ -14,8 +14,9 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from common.pgutils import get_conn, execute_sql, execute_select
 from lxml import etree
+from config import logger_path
 
-logging.config.fileConfig("logging.conf")
+logging.config.fileConfig(logger_path)
 logger = logging.getLogger("root")
 
 sql_cj = "INSERT INTO public.news_cj(news_date, spider_data, news_source, news_type, news) VALUES(%s, %s, %s, %s, %s)"

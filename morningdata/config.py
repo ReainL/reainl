@@ -18,3 +18,4 @@ def get_config(section, key):
     return config.get(section, key)
 
 
+logger_path = os.path.join(os.path.dirname(__file__), 'logging.conf')

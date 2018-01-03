@@ -12,8 +12,9 @@ import logging.config
 from forex_python.converter import CurrencyRates
 from sqlalchemy import create_engine
 from common.pgutils import get_conn, execute_sql, get_engine
+from config import logger_path
 
-logging.config.fileConfig("logging.conf")
+logging.config.fileConfig(logger_path)
 logger = logging.getLogger("root")
 
 code_engine = get_engine()

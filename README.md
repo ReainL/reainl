@@ -1,12 +1,12 @@
 # 华尔街和新浪财经新闻采集文档
-##一.技术选型
+## 一.技术选型
 1.requests作为爬虫程序处理网络请求的框架
 
 2.Beautiful作为解析网页的dom解析器
 
 3.数据库用postgresql,自动化测试工具使用的是谷歌浏览器的测试软件chromedriver
 
-##二.开发环境
+## 二.开发环境
 1.下载安装python3.4,debian8最新发行版自带python3.4版本，可通过在终端输入python3测试；若系统没有python3.4，使用以下命令安装:
 ```
 # apt-get install python3.4
@@ -50,7 +50,7 @@ http://blog.csdn.net/huilan_same/article/details/51896672
 ```
 # apt-get install pgadmin3
 ```
-##三.前期准备
+## 三.前期准备
 1.创建数据库表：在pgadmin III使用如下表语句创建table 
 	
 新闻表：
@@ -102,7 +102,7 @@ CREATE TABLE public.stock_code (
 |     stock_name    |    指数名称    |
 |     stock_price   |    指数价格    |
 |     stock_applies |    涨跌幅      |
-##四、项目工程目录
+## 四、项目工程目录
 系统各个模块之间的联系如下：
 
 - common/pgutils.py:主要连接postgresql数据库

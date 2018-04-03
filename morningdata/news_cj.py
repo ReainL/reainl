@@ -8,6 +8,7 @@ Created on 17-12-11
 import time
 import datetime
 import config
+import re
 import logging.config
 
 from bs4 import BeautifulSoup
@@ -15,11 +16,13 @@ from selenium import webdriver
 from common.pgutils import get_conn, execute_sql, execute_select
 from lxml import etree
 from config import logger_path
+from xvfbwrapper import Xvfb
+
 
 logging.config.fileConfig(logger_path)
 logger = logging.getLogger("root")
 
-sql_cj = "INSERT INTO public.news_cj(news_date, spider_data, news_source, news_type, news) VALUES(%s, %s, %s, %s, %s)"
+sql_cj = "INSERT INTO news_cj(news_date, spider_data, news_source, news_type, news) VALUES(%s, %s, %s, %s, %s)"
 
 chromedriver_path = config.get_config("chromedriver", "chromedriver_path")
 
@@ -35,7 +38,9 @@ def get_news(conn, max_date, current_time):
     spider_data = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
     driver = None
     try:
-        driver = webdriver.Chrome(executable_path=chromedriver_path)
+        xvfb = Xvfb(width=1280, height=720)
+        xvfb.start()
+        driver = webdriver.Firefox(executable_path=chromedriver_path)
         driver.get('https://wallstreetcn.com/live/global')
         # 让页面滚动到下面,window.scrollBy(0, scrollStep),ScrollStep ：间歇滚动间距
         js = 'window.scrollBy(0,3000)'
@@ -68,8 +73,9 @@ def get_news(conn, max_date, current_time):
             last_news_time = news_time
     finally:
         if driver:
-            driver.close()
+            # driver.close()
             driver.quit()
+            xvfb.stop()
 
 
 def get_sina_news(conn, max_date, current_time):
@@ -83,7 +89,9 @@ def get_sina_news(conn, max_date, current_time):
     spider_data = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
     driver = None
     try:
-        driver = webdriver.Chrome(executable_path=chromedriver_path)
+        xvfb = Xvfb(width=1280, height=720)
+        xvfb.start()
+        driver = webdriver.Firefox(executable_path=chromedriver_path)
         for num in range(1, 13):
             url = 'http://live.sina.com.cn/zt/app_zt/f/v/finance/globalnews1/?page=' + str(num)
             driver.get(url)
@@ -96,20 +104,25 @@ def get_sina_news(conn, max_date, current_time):
             time.sleep(5)
             pages = driver.page_source
             xml = etree.HTML(pages)
-            time_list = xml.xpath('//*[@id="bd_c0"]/div[@class="bd_list"]/div["bd_i_og"]/@data-time')
+            time_list = xml.xpath('//*[@id="bd_c0"]/div[@class="bd_list"]/div["bd_i"]/@data-time')
             soup = BeautifulSoup(pages, 'html.parser')
             soup1 = soup.find('div', class_='bd_list')
-            content = soup1.select('.bd_i_og')
+            content = soup1.select('.bd_i')
             news_source = '新浪财经'
             for i in range(len(time_list)):
                 time_stamp = time_list[i]
                 data = content[i]
                 time_array = time.localtime(int(time_stamp))
-                over_time = time.strftime("%Y-%m-%d %H:%M", time_array)
-                if max_date < over_time:
+                over_time = time.strftime("%Y-%m-%d %H:%M:%S", time_array)
+                if max_date <= over_time:
                     data_type = data.find('p', attrs={'class': 'bd_i_tags'}).get_text().strip().replace("\n", "")
                     news_type = data_type.replace(' ', '')
-                    news = data.find('p', attrs={'class': 'bd_i_txt_c'}).get_text()
+                    try:
+                        message = data.find('p', attrs={'class': 'bd_i_txt_c'}).get_text()
+                        mes = re.sub(r"http(.*)", '', message)
+                        news = re.sub('\s$', '', mes)
+                    except Exception as e:
+                        logger.error(e)
                     sql_params = [over_time, spider_data, news_source, news_type, news]
                     logger.debug(sql_cj)
                     logger.debug(sql_params)
@@ -118,8 +131,9 @@ def get_sina_news(conn, max_date, current_time):
                     return
     finally:
         if driver:
-            driver.close()
+            # driver.close()
             driver.quit()
+            xvfb.stop()
 
 
 def main():
@@ -127,23 +141,25 @@ def main():
     current_time = now.strftime("%Y-%m-%d %H:%M:%S")
     one_day = now - datetime.timedelta(days=1)
     one_day_ago = one_day.strftime('%Y-%m-%d %H:%M:%S')[:16]
+    history_day = (now - datetime.timedelta(days=10)).strftime('%Y-%m-%d %H:%M:%S')[:16]
     conn = None
     try:
         conn = get_conn()
         with conn:
             sql_max_date = """
-            SELECT max(CASE WHEN news_source='新浪财经' THEN news_date END),
-                max(CASE WHEN news_source='华尔街见闻' THEN news_date END)
-            FROM public.news_cj
+                SELECT max(CASE WHEN news_source='新浪财经' THEN news_date END),
+                    max(CASE WHEN news_source='华尔街见闻' THEN news_date END)
+                FROM news_cj
             """
             res = execute_select(conn, sql_max_date)
             max_date_sina = res[0][0] if res[0][0] else one_day_ago
             max_date_news = res[0][1] if res[0][1] else one_day_ago
             sql_delete = """
-                DELETE FROM public.news_cj
-                WHERE news_date <= (to_char(now()+interval '-10 day', 'YYYY-MM-DD HH:MI:SS')) or news_date in (%s, %s)
+                DELETE FROM news_cj
+                WHERE news_date <= %s  
+                    OR (news_source='华尔街见闻' AND news_date=%s) OR (news_source='新浪财经' AND news_date=%s)
             """
-            execute_sql(conn, sql_delete, (max_date_sina, max_date_news))
+            execute_sql(conn, sql_delete, (history_day, max_date_news, max_date_sina))
             get_news(conn, max_date_news, current_time)
             get_sina_news(conn, max_date_sina, current_time)
     finally:

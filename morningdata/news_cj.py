@@ -59,7 +59,10 @@ def get_news(conn, max_date, current_time):
         d_date = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
         for cont in content:
             news_time = cont.find('span', attrs={'class': 'live-item__time__text'}).get_text()
-            news = cont.find('div', attrs={'class': 'content-html'}).get_text().strip().replace('//', '')
+            news = cont.find('span', attrs={'class': 'content-html'})
+            if news is None:
+                return
+            news = news.get_text().strip().replace('//', '')
             if last_news_time < news_time:
                 d_date = d_date - datetime.timedelta(days=1)
             s_date = d_date.strftime("%Y-%m-%d")

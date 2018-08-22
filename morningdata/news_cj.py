@@ -35,6 +35,8 @@ def get_news(conn, max_date, current_time):
     :param current_time: 当前时间
     :return:
     """
+    func_name = "采集华尔街见闻"
+    logger.info('start %s ' % func_name)
     spider_data = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
     driver = None
     try:
@@ -74,6 +76,7 @@ def get_news(conn, max_date, current_time):
             logger.debug(sql_params)
             execute_sql(conn, sql_cj, sql_params)
             last_news_time = news_time
+        logger.info('end %s ' % func_name)
     finally:
         if driver:
             # driver.close()
@@ -89,13 +92,15 @@ def get_sina_news(conn, max_date, current_time):
     :param current_time: 当前时间
     :return:
     """
+    func_name = "采集新浪财经新闻"
+    logger.info('start %s ' % func_name)
     spider_data = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
     driver = None
     try:
         xvfb = Xvfb(width=1280, height=720)
         xvfb.start()
         driver = webdriver.Firefox(executable_path=chromedriver_path)
-        for num in range(1, 13):
+        for num in range(1, 2):
             url = 'http://live.sina.com.cn/zt/app_zt/f/v/finance/globalnews1/?page=' + str(num)
             driver.get(url)
             # 让页面滚动到下面,window.scrollBy(0, scrollStep),ScrollStep ：间歇滚动间距
@@ -107,19 +112,22 @@ def get_sina_news(conn, max_date, current_time):
             time.sleep(5)
             pages = driver.page_source
             xml = etree.HTML(pages)
-            time_list = xml.xpath('//*[@id="bd_c0"]/div[@class="bd_list"]/div["bd_i"]/@data-time')
+            time_list = xml.xpath('//*[@class="bd_c0"]/div[@class="bd_list"]/div["bd_i"]/@data-time')
             soup = BeautifulSoup(pages, 'html.parser')
-            soup1 = soup.find('div', class_='bd_list')
+            soup1 = soup.find('div', id='liveList01')
             content = soup1.select('.bd_i')
             news_source = '新浪财经'
             for i in range(len(time_list)):
                 time_stamp = time_list[i]
                 data = content[i]
-                time_array = time.localtime(int(time_stamp))
-                over_time = time.strftime("%Y-%m-%d %H:%M:%S", time_array)
+                over_time_1 = data.find('p', attrs={'class': 'bd_i_time_c'}).get_text()
+                over_time = time_stamp + over_time_1
+                over_time_d = datetime.datetime.strptime(over_time, "%Y%m%d%H:%M:%S")
+                over_time = datetime.datetime.strftime(over_time_d, "%Y-%m-%d %H:%M:%S")
                 if max_date <= over_time:
-                    data_type = data.find('p', attrs={'class': 'bd_i_tags'}).get_text().strip().replace("\n", "")
-                    news_type = data_type.replace(' ', '')
+                    # data_type = data.find('p', attrs={'class': 'bd_i_tags'}).get_text().strip().replace("\n", "")
+                    # news_type = data_type.replace(' ', '')
+                    news_type = ''
                     try:
                         message = data.find('p', attrs={'class': 'bd_i_txt_c'}).get_text()
                         mes = re.sub(r"http(.*)", '', message)
@@ -132,6 +140,7 @@ def get_sina_news(conn, max_date, current_time):
                     execute_sql(conn, sql_cj, sql_params)
                 else:
                     return
+        logger.info('end %s ' % func_name)
     finally:
         if driver:
             # driver.close()
@@ -165,6 +174,8 @@ def main():
             execute_sql(conn, sql_delete, (history_day, max_date_news, max_date_sina))
             get_news(conn, max_date_news, current_time)
             get_sina_news(conn, max_date_sina, current_time)
+    except Exception as e:
+        logger.error(str(e))
     finally:
         if conn:
             conn.close()

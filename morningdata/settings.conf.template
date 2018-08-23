@@ -13,3 +13,7 @@ DBType=PostgreSQL
 [chromedriver]
 chromedriver_path=/usr/local/share/chromedriver
 
+
+# 获取的html存储的文件路径
+[htmlpath]
+html_path=/home/xsl/下载/

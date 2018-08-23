@@ -25,6 +25,7 @@ logger = logging.getLogger("root")
 sql_cj = "INSERT INTO news_cj(news_date, spider_data, news_source, news_type, news) VALUES(%s, %s, %s, %s, %s)"
 
 chromedriver_path = config.get_config("chromedriver", "chromedriver_path")
+html_path = config.get_config("htmlpath", "html_path")
 
 
 def get_news(conn, max_date, current_time):
@@ -101,7 +102,8 @@ def get_sina_news(conn, max_date, current_time):
         xvfb.start()
         driver = webdriver.Firefox(executable_path=chromedriver_path)
         for num in range(1, 2):
-            url = 'http://live.sina.com.cn/zt/app_zt/f/v/finance/globalnews1/?page=' + str(num)
+            # url = 'http://live.sina.com.cn/zt/app_zt/f/v/finance/globalnews1/?page=' + str(num)
+            url = 'http://finance.sina.com.cn/7x24/'
             driver.get(url)
             # 让页面滚动到下面,window.scrollBy(0, scrollStep),ScrollStep ：间歇滚动间距
             js = 'window.scrollBy(0,3000)'
@@ -114,6 +116,7 @@ def get_sina_news(conn, max_date, current_time):
             xml = etree.HTML(pages)
             time_list = xml.xpath('//*[@class="bd_c0"]/div[@class="bd_list"]/div["bd_i"]/@data-time')
             soup = BeautifulSoup(pages, 'html.parser')
+            save_file(soup.encode('utf-8'))
             soup1 = soup.find('div', id='liveList01')
             content = soup1.select('.bd_i')
             news_source = '新浪财经'
@@ -146,6 +149,15 @@ def get_sina_news(conn, max_date, current_time):
             # driver.close()
             driver.quit()
             xvfb.stop()
+
+
+def save_file(data):
+    n = datetime.datetime.now()
+    s_date = n.strftime("%Y%m%d")
+    save_path = html_path + s_date + '_sina.txt'
+    f_obj = open(save_path, 'wb')  # wb 表示打开方式,也可用w
+    f_obj.write(data)
+    f_obj.close()
 
 
 def main():

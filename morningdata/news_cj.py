@@ -9,6 +9,7 @@ import time
 import datetime
 import config
 import re
+import sys
 import logging.config
 
 from bs4 import BeautifulSoup
@@ -37,7 +38,7 @@ def get_news(conn, max_date, current_time):
     :return:
     """
     func_name = "采集华尔街见闻"
-    logger.info('start %s ' % func_name)
+    logger.debug('start %s ' % func_name)
     spider_data = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
     driver = None
     try:
@@ -54,15 +55,16 @@ def get_news(conn, max_date, current_time):
         time.sleep(5)
         pages = driver.page_source
         soup = BeautifulSoup(pages, 'html.parser')
-        soup1 = soup.find('div', class_='livenews')
+
+        soup1 = soup.find('div', class_='livenews-main')
         content = soup1.find_all('div', class_='live-item')
         news_source = '华尔街见闻'
         news_type = '宏观'
         last_news_time = '23:59'
         d_date = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
         for cont in content:
-            news_time = cont.find('span', attrs={'class': 'live-item__time__text'}).get_text()
-            news = cont.find('span', attrs={'class': 'content-html'})
+            news_time = cont.find('time', attrs={'class': 'live-item_created'}).get_text()
+            news = cont.find('div', attrs={'class': 'live-item_main'}).find('div', attrs={'class': 'live-item_html'})
             if news is None:
                 return
             news = news.get_text().strip().replace('//', '')
@@ -77,7 +79,10 @@ def get_news(conn, max_date, current_time):
             logger.debug(sql_params)
             execute_sql(conn, sql_cj, sql_params)
             last_news_time = news_time
-        logger.info('end %s ' % func_name)
+        logger.debug('end %s ' % func_name)
+    except Exception as e:
+        msg = func_name + ' 处理失败: ' + str(e)
+        logger.error(msg)
     finally:
         if driver:
             # driver.close()
@@ -94,7 +99,7 @@ def get_sina_news(conn, max_date, current_time):
     :return:
     """
     func_name = "采集新浪财经新闻"
-    logger.info('start %s ' % func_name)
+    logger.debug('start %s ' % func_name)
     spider_data = datetime.datetime.strptime(current_time, '%Y-%m-%d %H:%M:%S')
     driver = None
     try:
@@ -143,7 +148,11 @@ def get_sina_news(conn, max_date, current_time):
                     execute_sql(conn, sql_cj, sql_params)
                 else:
                     return
-        logger.info('end %s ' % func_name)
+        logger.debug('end %s ' % func_name)
+        sys.exit()
+    except Exception as e:
+        msg = func_name + ' 处理失败: ' + str(e)
+        logger.error(msg)
     finally:
         if driver:
             # driver.close()
@@ -191,6 +200,7 @@ def main():
     finally:
         if conn:
             conn.close()
+            sys.exit()
 
 
 if __name__ == '__main__':
